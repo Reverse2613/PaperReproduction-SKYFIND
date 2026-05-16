@@ -78,9 +78,9 @@ def train_engine():
     def lr_lambda(epoch):
         if epoch < WARMUP_EPOCHS:
             return float(epoch + 1) / float(max(1, WARMUP_EPOCHS))
-        return 0.5 * (1.0 + torch.cos(torch.tensor((epoch - WARMUP_EPOCHS) / (NUM_EPOCHS - WARMUP_EPOCHS) * 3.1415926)))
-    # 余弦退火学习率调度器：让学习率像余弦曲线一样平滑下降
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, lr_lambda)
+        return float(0.5 * (1.0 + torch.cos(torch.tensor((epoch - WARMUP_EPOCHS) / (NUM_EPOCHS - WARMUP_EPOCHS) * 3.1415926))))
+    # ！！！必须使用 LambdaLR，千万不要用 CosineAnnealingLR ！！！
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
     
     '''这里的PAD_TOKEN_ID 只和计算损失函数有关，是连续坐标序列中的特殊标记，不是文本输入的 PAD_TOKEN_ID
     因为本次实验都是单图单目标（而且本次实验根本就没有补齐目标序列），没涉及到单图多目标，可以不加这个损失函数的 ignore_index了

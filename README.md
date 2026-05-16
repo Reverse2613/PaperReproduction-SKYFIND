@@ -4,13 +4,20 @@
  采用SeqTR为baseline，使用的是生成式。“分词器”的baseline采用的是bert-base-uncased。
  需要把图片和文本映射到同一个维度的特征空间，Encoder使用的DarkNet-53与“双向GRU”（bert-base-uncased是分词器，这里的GRU是特征提取器）。因为注意力机制对顺序不敏感（不知道顺序，也根本没关注过顺序），所以需要手动加入位置编码，本实验采用的正余弦位置编码。
 
+ 环境：显卡L20 48G，内存246G，CPU 10核心，当然本次实验没有把所有的这些硬件配置跑满，自己看自己的硬件配置手动更改批次大小、词token数量及图片resize尺寸即可训练。
+
+```
+ 包环境配置：
+
+```
+
  在开始全量数据跑通前，先开始跑单批次过拟合的测试，查看loss是否下降，整个前向传播与后向传播架构能否经得住测试，看模型到整个梯度的数据流是否无bug。
 
  当测试各个单个模块文件时，需要把导入的自定义模块路径删掉比如data.transforms-> transforms。解决方法是永远使用绝对路径导入（带上目录路径或文件夹路径），只把项目根目录当作中心。比如我们要运行data/dataset.py时，因为只把项目的根目录当作中心，导入时还是导入data.transforms、data.label_generator，运行单独测试data/dataset.py时，不使用python data/dataset.py ，而是使用python -m data.dataset。
 
  本论文说是两阶段，但是其实网络结构里面没有体现两阶段（其实鄙人也不断定，但因为目前截止到5 month-12 day-2026 year未找到原作者的源码，而且这只是插件的话，就是一个软两阶段吧），只是在坐标回归生成序列时，先回归生成第一阶段大框的坐标，再后生成第二阶段精细框的坐标，所以也算是两阶段。所以原论文作者的方法是一个很通用的方法，不需要改网络结构，可以直接即插即用去提升指标，但是定性来说的话，这样会花费更多时间，毕竟是生成式一个一个词的输出。如果冒昧了，先说声抱歉，还请包涵，联系鄙人，鄙人道歉，感谢。
 
- 1.seqtr_aerial.py 、train_overfit.py、train.py需要认真看看。√
+ 1.seqtr_aerial.py 、train_overfit.py、train.py需要认真看看。
 
  2.图片有些是坏掉了，应该跳过。√
 
@@ -20,7 +27,7 @@
 
  5.使用热力图分析第一阶段是否能大致确定目标区域。
 
- 6.训练速度太慢，损失下降也非常慢（第一轮到第十三轮，总平均损失才下降0.8左右）。√
+ 6.训练速度太慢，损失下降也非常慢（第一轮到第十三轮，总平均损失才下降0.8左右）。
 
 ----------------------------------
 为了方便不记那么多命令，直接写了train.sh是自定义的训练脚本，先升级权限 chmod +x train.sh， 再直接./train.sh。但是为了保护硬盘寿命、提高读写效率，操作系统默认：只有当积攒够了一定数量的字符（通常是 4KB 或 8KB 内存块）时，才会一次性把数据写入到硬盘上的定向到的文件里。解决方案（为了实时刷新查看）：1.在 Python 的 print 函数里加一个参数：print(f"...", flush=True)；2.nohup python -u train.py > train.log 2>&1 &
@@ -32,8 +39,8 @@
  2>&1：把标准错误也重定向到同一个文件
  &：后台运行
 
- 杀死后台用 
- pkill -9 train.py
+ 杀死后台用 （杀死该进程任务）
+ pkill -9 train.py or PID
  pkill -f train.py
  实时查看训练状态
  tail -f train.log
@@ -43,7 +50,7 @@
  ```
 
  **关于本次复现实验，编写代码文件的顺序如下（一定程度反映了流程）：**
-
+ 
  ```mermaid
  graph TB
  A(data/label_generator.py)-->B(data/transforms.py)-->C(data/dataset.py)
@@ -58,11 +65,11 @@
 ```mermaid
  graph TB
 A(Vision Encoder)-->C
-B(Text Encoder)-->C[Cat,拼接视觉与语言的高维语义输出特征]-->D[Position Encoder]-->K(Add Mask，对补齐的token不需要计算注意力)-->E(Self-Attention)-->H
+B(Text Encoder)-->C[Cat,拼接视觉与语言输出特征]-->D[Position Encoder]-->K(Add Text Mask)-->E(Self-Attention)-->H
 F(Target Sequence)-->J[Position Encoder]-->G(Mask Attention)-->H(Cross Attention)-->I(Linear Class)
 ```
 
-**我已经快被里面的文本掩码、注意力掩码、GRU里面的掩码绕晕了。**
+**我已经快被里面的文本掩码、注意力掩码、GRU里面的掩码绕晕了。不过我又绕回来了，win**
 ```
 之前的代码未在GRU里面引入文本掩码，污染了真实的token时的隐状态，已经改进。
 图像与文本拼接后计算自注意力引入掩码，已改进。
