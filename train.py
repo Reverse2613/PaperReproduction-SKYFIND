@@ -17,12 +17,12 @@ def train_engine():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f" 启动训练引擎，使用设备: {device}")
     
-    # 路径配置 (请替换为你的真实路径)
+    # 路径配置 
     TRAIN_JSON = "/root/group_data/Train.json" 
     VAL_JSON = "/root/group_data/Val.json"   #新增加验证集，来保存最佳模型权重
     IMG_DIR = "/root/group_data/SkyFind-images"
     SAVE_DIR = "checkpoints/" # 权重保存文件夹
-    OLD_WEIGHTS_PATH = "checkpoints/best_model.pth" # 引入之前训练的权重文件
+    OLD_WEIGHTS_PATH = "checkpoints/best_model0.pth" # 引入之前训练的权重文件
     os.makedirs(SAVE_DIR, exist_ok=True)
     
     # 训练超参数
@@ -124,9 +124,19 @@ def train_engine():
                 target_flat = tgt_seq[:,1:].contiguous().view(-1)
                 loss = criterion(logits_flat, target_flat)
             
+            # ==========================================
+            # 防御防线：拦截 NaN，防止权重污染！
+            # ==========================================
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"\n 致命警告: 发现 NaN/Inf Loss！位于批次 {batch_idx+1}。")
+                print(" 已强制跳过该批次的反向传播，保护模型权重不被污染！")
+                optimizer.zero_grad() # 清空这个剧毒的梯度
+                continue # 直接进入下一个 Batch
+
             # AMP反向传播与优化
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer) #解码梯度，以便进行梯度裁剪
+            # 梯度裁剪：强行把梯度范数压制在 1.0 以下，彻底防止梯度爆炸！
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             scaler.step(optimizer)
             scaler.update() #更新梯度缩放器
