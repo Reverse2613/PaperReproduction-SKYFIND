@@ -92,7 +92,7 @@ def train_engine():
     PAD_TOKEN_ID = 1003
     criterion = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
     #AMP加速，初始化梯度缩放器
-    scaler = GradScaler('cuda') #如果使用GPU则启用混合精度训练，否则使用普通精度
+    #scaler = GradScaler('cuda') #如果使用GPU则启用混合精度训练，否则使用普通精度
 
     # ==========================================
     # 4. 安全核心：训练、验证循环与权重管理
@@ -116,8 +116,8 @@ def train_engine():
             #梯度清零
             optimizer.zero_grad()
 
-            # 开启AMP半精度前向传播
-            with autocast('cuda'): #启用自动混合精度
+            # 开启AMP半精度前向传播,使用BF16混合精度训练，既能加速又能节省显存，同时保持数值稳定性
+            with autocast('cuda',dtype=torch.bfloat16): 
                 logits = model(images,text_ids,text_masks,tgt_seq)
                 # 错位计算 Loss (机理和 overfit 脚本完全一样)
                 logits_flat = logits.view(-1, 1004)
@@ -134,12 +134,15 @@ def train_engine():
                 continue # 直接进入下一个 Batch
 
             # AMP反向传播与优化
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer) #解码梯度，以便进行梯度裁剪
+            #scaler.scale(loss).backward()
+            #scaler.unscale_(optimizer) #解码梯度，以便进行梯度裁剪
+
+            loss.backward() #直接反向传播
             # 梯度裁剪：强行把梯度范数压制在 1.0 以下，彻底防止梯度爆炸！
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update() #更新梯度缩放器
+            optimizer.step() #更新权重
+            #scaler.step(optimizer)
+            #scaler.update() #更新梯度缩放器
 
             #累加训练损失
             total_train_loss += loss.item()
@@ -179,14 +182,14 @@ def train_engine():
         #  硬盘保命机制：覆盖式保存
         # ==========================================
         # 1. 保存最新权重 (覆盖旧的 latest_model1.pth)
-        latest_path = os.path.join(SAVE_DIR, "latest_model1.pth")
+        latest_path = os.path.join(SAVE_DIR, "latest_model2.pth")
         torch.save(model.state_dict(), latest_path)
         print(f" 已保存最新权重至: {latest_path}")
         
         # 2. 如果当前 验证集Loss 是历史最低，则覆盖保存 best_model1.pth
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            best_path = os.path.join(SAVE_DIR, "best_model1.pth")
+            best_path = os.path.join(SAVE_DIR, "best_model2.pth")
             torch.save(model.state_dict(), best_path)
             print(f" 发现更低 Loss ({best_val_loss:.4f})! 已覆盖保存最优权重至: {best_path}")
 
