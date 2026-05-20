@@ -1,7 +1,7 @@
 # SkyFind paper 的复现记录（复现日志）
 ## 随意日志
 
-**文件结构：**
+**文件结构:**
 
 ```
 PaperReproduction-SKYFIND/            # 项目根目录
@@ -42,7 +42,9 @@ PaperReproduction-SKYFIND/            # 项目根目录
 └── requirements.txt                  #  极简依赖清单：仅依赖 torch, torchvision, opencv, pillow 等基础库
 ```
 
-**本次训练权重下载位置：**1.https://1853792917.share.123865.com/123pan/71JPvd-1Opbd（123云盘的分享，不过好像不能免登录下载了，要登陆）
+**本次训练权重下载位置:**
+
+1.https://1853792917.share.123865.com/123pan/71JPvd-1Opbd（123云盘的分享，不过好像不能免登录下载了，要登陆）
 
 2.reverseKang/skyfindReproduction（huggingface里面搜索里面搜这个，之后在文件里面下载best_model1.pth）
 
@@ -51,9 +53,13 @@ PaperReproduction-SKYFIND/            # 项目根目录
  采用SeqTR为baseline，使用的是生成式。“分词器”的baseline采用的是bert-base-uncased。
  需要把图片和文本映射到同一个维度的特征空间，Encoder使用的DarkNet-53与“双向GRU”（bert-base-uncased是分词器，这里的GRU是特征提取器）。因为注意力机制对顺序不敏感（不知道顺序，也根本没关注过顺序），所以需要手动加入位置编码，本实验采用的正余弦位置编码。
 
- **环境：**显卡L20 48G，内存246G，CPU 10核心，当然本次实验没有把所有的这些硬件配置跑满，自己看自己的硬件配置手动更改批次大小、词token数量及图片resize尺寸即可训练。
+ **环境:**
 
-**Dataset：**SkyFind
+显卡L20 48G，内存246G，CPU 10核心，当然本次实验没有把所有的这些硬件配置跑满，自己看自己的硬件配置手动更改批次大小、词token数量及图片resize尺寸即可训练。
+
+**Dataset：**
+
+SkyFind
 
 **操作流程:**
 
@@ -162,9 +168,13 @@ F(Target Sequence)-->J[Position Encoder]-->G(Mask Attention)-->H(Cross Attention
 ​	1.训练和测试时必须保持“完全相同”的高维词嵌入表示。但是在训练阶段时，高维词嵌入的表示是会更新的（因为Embedding层只要没被冻结，梯度更新也会传播到Embedding层的权重进行修改，也就是在训练阶段它是可训练的、会更新的）。
 
 ​	2.就算推理的时候确实是按顺序输入进去的，得到上一步的预测，拼接后再输入进去，但是还是必须要“下三角掩码”，防止现在干扰过去的特征表示（保护过去）。加上了掩码后，过去的特征永远不变。可以利用把算好的过去特征保存起来，现代的大模型推理时采用的KV-Cache（键值缓存，可以直接不需要下三角掩码）技术加速推理，历史的keys和values保存到缓存库里，输入给Decoder时只需要输入最新生成预测的那个token，不需要像本次实验这样拼接过去与最新预测的输出之后再给Decoder。
+
 ​       3.使用了BF16（指数位变多，尾数为变少，因为深度学习对于小数点后面的精度不是很敏感，可以使用BF16），最大整数的范围变大了防止nan和数值溢出，但精度变低，但还是16位，和FP16占用显存相同。
+
 ​       4.Encoder输出之后的memory，在标准的Transformer架构中，不能直接当K和V使用，它必须分别乘以两个不同的权重矩阵Wk和Wv（在多头注意力中，会乘以多组矩阵），还要经过线性投影才能真正变成K键和V值，不过本次代码调用的nn.TransformerDecoderLayer 内部会自动生成Wk和Wv权重矩阵（多组），并使用memory分别乘以它们，不需要手动显示的写这个投影层。
+
 ​       5.同理，在掩码注意力后输出得到的当前坐标序列的上下文状态，当它和Encoder输出的memory进行查阅时，不能直接使用，而是也要先经过线性投影（查询权重矩阵Wq，多组），乘以权重矩阵（多组）后，转换为真正的Q，不过在nn.TransformerDecoderLayer 内部也定义写好了，自动会计算这一步。所以呀，在任何进入Attention机制的张量，在做内积前，必定会经过一次线性投影。让张量从原有的特征空间转换为适合统一做注意力的空间。
+
 ​       6.关于token ID是分词器得来的，Token ID就是永远固定的、不变的，它只是一个词表的索引。我们的分词的token ID是固定不变的（无论什么时候训练和推理时），只是tokens ID对应的高维词嵌入在训练的时候会变化，而且推理的时候词嵌入向量也不变了。
 
 ​	7.我们本次只是使用了BERT的分词器Tokenizer词表进行分词，只使用了BERT的字典，可没有使用BERT的任何神经网络模型层。使用的是nn.Embedding层网络，nn.Embedding层与BERT毫无关系。
