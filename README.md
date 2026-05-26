@@ -179,6 +179,20 @@ F(Target Sequence)-->J[Position Encoder]-->G(Mask Attention)-->H(Cross Attention
 
 ​	7.我们本次只是使用了BERT的分词器Tokenizer词表进行分词，只使用了BERT的字典，可没有使用BERT的任何神经网络模型层。使用的是nn.Embedding层网络，nn.Embedding层与BERT毫无关系。
 
+## 关于权重和日志对应
+
+在实验初期还有许多权重，不过因为实验测试和检验以及实验过程中，因为感觉太拉了，就删掉了，目前就保留了以下几个：
+
+1.best_model.pth------>最开始元老级别的权重，在实验过程中发生了梯度爆炸和数值溢出时，使用验证集保存的最好的一次权重。对应的log日志，我已删除
+
+2.best_model1.pth----->训练了30轮，使用了之前梯度爆炸、数值溢出时的权重为预训练权重。对应的log日志为train.log
+
+3.best_model2.pth----->原定给了30轮，未使用预训练权重（自己实验的预训练权重），但是只训练了16轮就停掉了（因为服务器的要超额度了，得省着点用了）。对应的log日志为train2.log
+
+4.trainLogs.txt对应的是未使用掩码时训练20轮得到的权重，也就是最最开始的实验
+
+5.best_model3.pth----->使用best_model1.pth为预训练权重 ，使用的数据为增强的文本表达输入，图片还是如之前一样，不过输入的文本表达增强了（类似微调模型），为了模型能更好的学习到我们的指令（顺序、方位、语法之类的吧，不一定训练了就有用，得看实验结果），对应的log日志为train_aug.log
+
 ## Reference paper：
 
 1.SkyFind: A Large-Scale Benchmark Unveiling
